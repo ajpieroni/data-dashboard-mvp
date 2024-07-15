@@ -10,7 +10,7 @@
 
 .App-header {
   background-color: #FFF;
-  min-height: 100vh;
+  min-height: 20vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -23,3 +23,30 @@
   color: #61dafb;
 }
 
+
+/* App.css */
+
+.Login {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.Login input {
+  margin: 10px;
+  padding: 10px;
+  font-size: 16px;
+}
+
+.Login label {
+  margin: 10px;
+  font-size: 16px;
+}
+
+.Login button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+}
