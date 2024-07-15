@@ -1,6 +1,7 @@
 import logo from './logo.png';
 import './App.css';
 import Hubspot from './components/hubspot';
+import Eventbrite from './components/eventbrite';
 
 function App() {
   return (
