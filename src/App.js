@@ -10,6 +10,7 @@ function App() {
         <p>
           Out in Tech: Staff Data Dashboard
           <Hubspot />
+          <Eventbrite />
         </p>
         <a
           className="App-link"
