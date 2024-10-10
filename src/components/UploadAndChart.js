@@ -2,57 +2,11 @@ import React, { useState } from 'react';
 import CSVReader from 'react-csv-reader';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-    CartesianGrid, PieChart, Pie, Cell, Legend
+    CartesianGrid, ScatterChart, Scatter, Legend
 } from 'recharts';
 import Select from 'react-select';
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#8dd1e1', '#a4de6c', '#d0ed57', '#d0ed6e'];
-
-/** Custom Paginated Legend Component **/
-const PaginatedLegend = (props) => {
-    const { payload } = props;
-    const [currentPage, setCurrentPage] = useState(0);
-    const itemsPerPage = 10;
-    const totalPages = Math.ceil(payload.length / itemsPerPage);
-
-    const startIndex = currentPage * itemsPerPage;
-    const paginatedItems = payload.slice(startIndex, startIndex + itemsPerPage);
-
-    const handleNextPage = () => {
-        setCurrentPage((prevPage) => Math.min(prevPage + 1, totalPages - 1));
-    };
-
-    const handlePrevPage = () => {
-        setCurrentPage((prevPage) => Math.max(prevPage - 1, 0));
-    };
-
-    return (
-        <div>
-            <ul className="recharts-default-legend">
-                {paginatedItems.map((entry, index) => (
-                    <li key={`item-${startIndex + index}`} className="legend-item">
-                        <span
-                            className="legend-color"
-                            style={{ backgroundColor: entry.color }}
-                        ></span>
-                        {entry.value}
-                    </li>
-                ))}
-            </ul>
-            <div className="legend-pagination">
-                <button onClick={handlePrevPage} disabled={currentPage === 0}>
-                    Previous
-                </button>
-                <span>
-                    Page {currentPage + 1} of {totalPages}
-                </span>
-                <button onClick={handleNextPage} disabled={currentPage === totalPages - 1}>
-                    Next
-                </button>
-            </div>
-        </div>
-    );
-};
 
 const UploadAndChart = () => {
     const [data, setData] = useState([]);
@@ -71,7 +25,12 @@ const UploadAndChart = () => {
 
             const percentageCheckedIn = ticketsAvailableNum > 0 ? (effectiveTicketsSold / ticketsAvailableNum) * 100 : 0;
             const chapter = event.split('|')[0].trim();
-            return { chapter, percentageCheckedIn };
+            return {
+                chapter,
+                percentageCheckedIn,
+                ticketsSoldNum: effectiveTicketsSold,
+                ticketsAvailableNum
+            };
         });
 
         // Aggregate data by chapter
@@ -80,14 +39,24 @@ const UploadAndChart = () => {
             if (existing) {
                 existing.totalPercentage += curr.percentageCheckedIn;
                 existing.eventCount += 1;
+                existing.totalTicketsSold += curr.ticketsSoldNum;
+                existing.totalTicketsAvailable += curr.ticketsAvailableNum;
             } else {
-                acc.push({ chapter: curr.chapter, totalPercentage: curr.percentageCheckedIn, eventCount: 1 });
+                acc.push({
+                    chapter: curr.chapter,
+                    totalPercentage: curr.percentageCheckedIn,
+                    eventCount: 1,
+                    totalTicketsSold: curr.ticketsSoldNum,
+                    totalTicketsAvailable: curr.ticketsAvailableNum
+                });
             }
             return acc;
         }, []).map(item => ({
             chapter: item.chapter,
             averagePercentage: item.totalPercentage / item.eventCount,
-            eventCount: item.eventCount
+            eventCount: item.eventCount,
+            totalTicketsSold: item.totalTicketsSold,
+            totalTicketsAvailable: item.totalTicketsAvailable
         }));
 
         // Sort aggregatedData by eventCount in descending order
@@ -120,6 +89,19 @@ const UploadAndChart = () => {
         ? data.filter(d => selectedChapters.some(sc => sc.value === d.chapter))
         : data; // Show all data if no chapters are selected
 
+    // Create histogram data
+    const histogramBins = Array.from({ length: 10 }, (_, i) => ({
+        bin: `${i * 10}-${(i + 1) * 10}%`,
+        count: 0
+    }));
+
+    filteredData.forEach(item => {
+        const index = Math.min(Math.floor(item.averagePercentage / 10), 9);
+        histogramBins[index].count += 1;
+    });
+
+    const histogramData = histogramBins.filter(bin => bin.count > 0);
+
     return (
         <div>
             <h2>Upload CSV and View Event Check-In Chart</h2>
@@ -135,6 +117,7 @@ const UploadAndChart = () => {
             )}
             {filteredData.length > 0 && (
                 <>
+                    {/* Bar Chart of Average Percentage per Chapter */}
                     <ResponsiveContainer width="100%" height={400}>
                         <BarChart
                             data={filteredData}
@@ -144,29 +127,54 @@ const UploadAndChart = () => {
                             <XAxis dataKey="chapter" angle={-45} textAnchor="end" interval={0} />
                             <YAxis tickFormatter={formatPercentage} />
                             <Tooltip formatter={(value, name, props) => [`${formatPercentage(value)} - ${props.payload.eventCount} events`, 'Average Percentage']} />
-                            <Bar dataKey="averagePercentage" fill="#82ca9d" />
+                            <Bar dataKey="averagePercentage" fill="#82ca9d" name="Average Percentage" />
                         </BarChart>
                     </ResponsiveContainer>
+
+                    {/* Stacked Bar Chart of Tickets Sold and Tickets Available */}
+                    <h3>Tickets Sold vs. Tickets Available per Chapter</h3>
                     <ResponsiveContainer width="100%" height={400}>
-                        <PieChart>
-                            <Pie
-                                data={filteredData}
-                                dataKey="averagePercentage" // Corrected dataKey
-                                nameKey="chapter"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={150}
-                                fill="#8884d8"
-                                label={({ chapter, averagePercentage, eventCount }) => `${chapter}: ${formatPercentage(averagePercentage)}, ${eventCount} events`}
-                                labelLine={false}
-                            >
-                                {filteredData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value, name, props) => [`${formatPercentage(value)} - ${props.payload.eventCount} events`, 'Average Percentage']} />
-                            <Legend content={PaginatedLegend} />
-                        </PieChart>
+                        <BarChart
+                            data={filteredData}
+                            margin={{ top: 20, right: 30, left: 30, bottom: 100 }}
+                        >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="chapter" angle={-45} textAnchor="end" interval={0} />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="totalTicketsAvailable" fill="#8884d8" name="Tickets Available" />
+                            <Bar dataKey="totalTicketsSold" fill="#82ca9d" name="Tickets Sold" />
+                        </BarChart>
+                    </ResponsiveContainer>
+
+                    {/* Scatter Plot of Event Count vs. Average Percentage */}
+                    <h3>Event Count vs. Average Percentage per Chapter</h3>
+                    <ResponsiveContainer width="100%" height={400}>
+                        <ScatterChart
+                            margin={{ top: 20, right: 30, left: 30, bottom: 30 }}
+                        >
+                            <CartesianGrid />
+                            <XAxis type="number" dataKey="eventCount" name="Event Count" />
+                            <YAxis type="number" dataKey="averagePercentage" name="Average Percentage" tickFormatter={formatPercentage} />
+                            <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(value, name) => name === 'Average Percentage' ? formatPercentage(value) : value} />
+                            <Scatter name="Chapters" data={filteredData} fill="#8884d8" />
+                        </ScatterChart>
+                    </ResponsiveContainer>
+
+                    {/* Histogram of Average Percentage Across Chapters */}
+                    <h3>Distribution of Average Percentage Across Chapters</h3>
+                    <ResponsiveContainer width="100%" height={400}>
+                        <BarChart
+                            data={histogramData}
+                            margin={{ top: 20, right: 30, left: 30, bottom: 30 }}
+                        >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="bin" />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="count" fill="#82ca9d" name="Number of Chapters" />
+                        </BarChart>
                     </ResponsiveContainer>
                 </>
             )}
