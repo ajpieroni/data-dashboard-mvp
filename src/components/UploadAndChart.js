@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import CSVReader from 'react-csv-reader';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts';
 import Select from 'react-select';
+import Papa from 'papaparse';
+
+// File path (replace this with the actual path if necessary)
+const FILE_PATH = '../MyEvents.csv';
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#8dd1e1', '#a4de6c', '#d0ed57', '#d0ed6e'];
 
@@ -9,32 +12,40 @@ const UploadAndChart = () => {
     const [data, setData] = useState([]);
     const [selectedChapters, setSelectedChapters] = useState([]);
 
-    const handleFileUpload = (data) => {
-        const processedData = data.slice(1).map(row => {
-            const [event, , , ticketsSold, ticketsAvailable] = row;
-            const percentageCheckedIn = ticketsAvailable > 0 ? (ticketsSold / ticketsAvailable) * 100 : 0;
-            const chapter = event.split('|')[0].trim();
-            return { chapter, percentageCheckedIn };
-        });
+    // Function to read data natively from the file
+    useEffect(() => {
+        Papa.parse(FILE_PATH, {
+            download: true,
+            header: false,
+            complete: (result) => {
+                const csvData = result.data;
+                const processedData = csvData.slice(1).map(row => {
+                    const [event, , , ticketsSold, ticketsAvailable] = row;
+                    const percentageCheckedIn = ticketsAvailable > 0 ? (ticketsSold / ticketsAvailable) * 100 : 0;
+                    const chapter = event.split('|')[0].trim();
+                    return { chapter, percentageCheckedIn };
+                });
 
-        // Aggregate data by chapter
-        const aggregatedData = processedData.reduce((acc, curr) => {
-            const existing = acc.find(item => item.chapter === curr.chapter);
-            if (existing) {
-                existing.totalPercentage += curr.percentageCheckedIn;
-                existing.eventCount += 1;
-            } else {
-                acc.push({ chapter: curr.chapter, totalPercentage: curr.percentageCheckedIn, eventCount: 1 });
+                // Aggregate data by chapter
+                const aggregatedData = processedData.reduce((acc, curr) => {
+                    const existing = acc.find(item => item.chapter === curr.chapter);
+                    if (existing) {
+                        existing.totalPercentage += curr.percentageCheckedIn;
+                        existing.eventCount += 1;
+                    } else {
+                        acc.push({ chapter: curr.chapter, totalPercentage: curr.percentageCheckedIn, eventCount: 1 });
+                    }
+                    return acc;
+                }, []).map(item => ({
+                    chapter: item.chapter,
+                    averagePercentage: item.totalPercentage / item.eventCount,
+                    eventCount: item.eventCount
+                }));
+
+                setData(aggregatedData);
             }
-            return acc;
-        }, []).map(item => ({
-            chapter: item.chapter,
-            averagePercentage: item.totalPercentage / item.eventCount,
-            eventCount: item.eventCount
-        }));
-
-        setData(aggregatedData);
-    };
+        });
+    }, []);
 
     const options = data.map(item => ({
         value: item.chapter,
@@ -43,14 +54,13 @@ const UploadAndChart = () => {
 
     const filteredData = selectedChapters.length > 0 
         ? data.filter(d => selectedChapters.some(sc => sc.value === d.chapter))
-        : data;
+        : [];
 
     const formatPercentage = (value) => `${value.toFixed(2)}%`;
 
     return (
         <div>
-            <h2>Upload CSV and View Event Check-In Chart</h2>
-            <CSVReader onFileLoaded={handleFileUpload} />
+            <h2>Event Check-In Chart</h2>
             <Select
                 isMulti
                 options={options}
