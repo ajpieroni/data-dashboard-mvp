@@ -17,6 +17,7 @@ const UploadAndChart = () => {
             return { chapter, percentageCheckedIn };
         });
 
+        // Aggregate data by chapter
         const aggregatedData = processedData.reduce((acc, curr) => {
             const existing = acc.find(item => item.chapter === curr.chapter);
             if (existing) {
