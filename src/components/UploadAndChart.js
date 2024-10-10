@@ -1,72 +1,138 @@
-import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts';
+import React, { useState } from 'react';
+import CSVReader from 'react-csv-reader';
+import {
+    BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+    CartesianGrid, PieChart, Pie, Cell, Legend
+} from 'recharts';
 import Select from 'react-select';
-import Papa from 'papaparse';
-
-// File path (replace this with the actual path if necessary)
-const FILE_PATH = '../MyEvents.csv';
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#8dd1e1', '#a4de6c', '#d0ed57', '#d0ed6e'];
+
+/** Custom Paginated Legend Component **/
+const PaginatedLegend = (props) => {
+    const { payload } = props;
+    const [currentPage, setCurrentPage] = useState(0);
+    const itemsPerPage = 10;
+    const totalPages = Math.ceil(payload.length / itemsPerPage);
+
+    const startIndex = currentPage * itemsPerPage;
+    const paginatedItems = payload.slice(startIndex, startIndex + itemsPerPage);
+
+    const handleNextPage = () => {
+        setCurrentPage((prevPage) => Math.min(prevPage + 1, totalPages - 1));
+    };
+
+    const handlePrevPage = () => {
+        setCurrentPage((prevPage) => Math.max(prevPage - 1, 0));
+    };
+
+    return (
+        <div>
+            <ul className="recharts-default-legend">
+                {paginatedItems.map((entry, index) => (
+                    <li key={`item-${startIndex + index}`} className="legend-item">
+                        <span
+                            className="legend-color"
+                            style={{ backgroundColor: entry.color }}
+                        ></span>
+                        {entry.value}
+                    </li>
+                ))}
+            </ul>
+            <div className="legend-pagination">
+                <button onClick={handlePrevPage} disabled={currentPage === 0}>
+                    Previous
+                </button>
+                <span>
+                    Page {currentPage + 1} of {totalPages}
+                </span>
+                <button onClick={handleNextPage} disabled={currentPage === totalPages - 1}>
+                    Next
+                </button>
+            </div>
+        </div>
+    );
+};
 
 const UploadAndChart = () => {
     const [data, setData] = useState([]);
     const [selectedChapters, setSelectedChapters] = useState([]);
+    const [options, setOptions] = useState([]);
 
-    // Function to read data natively from the file
-    useEffect(() => {
-        Papa.parse(FILE_PATH, {
-            download: true,
-            header: false,
-            complete: (result) => {
-                const csvData = result.data;
-                const processedData = csvData.slice(1).map(row => {
-                    const [event, , , ticketsSold, ticketsAvailable] = row;
-                    const percentageCheckedIn = ticketsAvailable > 0 ? (ticketsSold / ticketsAvailable) * 100 : 0;
-                    const chapter = event.split('|')[0].trim();
-                    return { chapter, percentageCheckedIn };
-                });
+    const handleFileUpload = (uploadedData) => {
+        // Assuming the CSV has headers: Event, Tickets Sold, Tickets Available
+        const processedData = uploadedData.slice(1).map(row => {
+            const [event, , , ticketsSold, ticketsAvailable] = row;
+            const ticketsSoldNum = parseFloat(ticketsSold) || 0;
+            const ticketsAvailableNum = parseFloat(ticketsAvailable) || 0;
 
-                // Aggregate data by chapter
-                const aggregatedData = processedData.reduce((acc, curr) => {
-                    const existing = acc.find(item => item.chapter === curr.chapter);
-                    if (existing) {
-                        existing.totalPercentage += curr.percentageCheckedIn;
-                        existing.eventCount += 1;
-                    } else {
-                        acc.push({ chapter: curr.chapter, totalPercentage: curr.percentageCheckedIn, eventCount: 1 });
-                    }
-                    return acc;
-                }, []).map(item => ({
-                    chapter: item.chapter,
-                    averagePercentage: item.totalPercentage / item.eventCount,
-                    eventCount: item.eventCount
-                }));
+            // Cap ticketsSoldNum at ticketsAvailableNum
+            const effectiveTicketsSold = Math.min(ticketsSoldNum, ticketsAvailableNum);
 
-                setData(aggregatedData);
-            }
+            const percentageCheckedIn = ticketsAvailableNum > 0 ? (effectiveTicketsSold / ticketsAvailableNum) * 100 : 0;
+            const chapter = event.split('|')[0].trim();
+            return { chapter, percentageCheckedIn };
         });
-    }, []);
 
-    const options = data.map(item => ({
-        value: item.chapter,
-        label: item.chapter,
-    }));
+        // Aggregate data by chapter
+        let aggregatedData = processedData.reduce((acc, curr) => {
+            const existing = acc.find(item => item.chapter === curr.chapter);
+            if (existing) {
+                existing.totalPercentage += curr.percentageCheckedIn;
+                existing.eventCount += 1;
+            } else {
+                acc.push({ chapter: curr.chapter, totalPercentage: curr.percentageCheckedIn, eventCount: 1 });
+            }
+            return acc;
+        }, []).map(item => ({
+            chapter: item.chapter,
+            averagePercentage: item.totalPercentage / item.eventCount,
+            eventCount: item.eventCount
+        }));
 
-    const filteredData = selectedChapters.length > 0 
-        ? data.filter(d => selectedChapters.some(sc => sc.value === d.chapter))
-        : [];
+        // Sort aggregatedData by eventCount in descending order
+        aggregatedData.sort((a, b) => b.eventCount - a.eventCount);
+
+        // Get top 10 chapters
+        const topChapters = aggregatedData.slice(0, 10);
+
+        // Create options for the select component
+        const newOptions = aggregatedData.map(item => ({
+            value: item.chapter,
+            label: item.chapter,
+        }));
+
+        // Set default selected chapters to the top 10
+        const defaultSelectedChapters = topChapters.map(item => ({
+            value: item.chapter,
+            label: item.chapter,
+        }));
+
+        // Update state
+        setData(aggregatedData);
+        setOptions(newOptions);
+        setSelectedChapters(defaultSelectedChapters);
+    };
 
     const formatPercentage = (value) => `${value.toFixed(2)}%`;
 
+    const filteredData = selectedChapters.length > 0
+        ? data.filter(d => selectedChapters.some(sc => sc.value === d.chapter))
+        : data; // Show all data if no chapters are selected
+
     return (
         <div>
-            <h2>Event Check-In Chart</h2>
-            <Select
-                isMulti
-                options={options}
-                onChange={setSelectedChapters}
-                placeholder="Filter chapters..."
-            />
+            <h2>Upload CSV and View Event Check-In Chart</h2>
+            <CSVReader onFileLoaded={handleFileUpload} />
+            {data.length > 0 && (
+                <Select
+                    isMulti
+                    options={options}
+                    onChange={setSelectedChapters}
+                    placeholder="Filter chapters..."
+                    value={selectedChapters}
+                />
+            )}
             {filteredData.length > 0 && (
                 <>
                     <ResponsiveContainer width="100%" height={400}>
@@ -85,7 +151,7 @@ const UploadAndChart = () => {
                         <PieChart>
                             <Pie
                                 data={filteredData}
-                                dataKey="averagePercentage"
+                                dataKey="% Checked In"
                                 nameKey="chapter"
                                 cx="50%"
                                 cy="50%"
@@ -98,7 +164,7 @@ const UploadAndChart = () => {
                                 ))}
                             </Pie>
                             <Tooltip formatter={(value, name, props) => `${formatPercentage(value)} - ${props.payload.eventCount} events`} />
-                            <Legend />
+                            <Legend content={PaginatedLegend} />
                         </PieChart>
                     </ResponsiveContainer>
                 </>
