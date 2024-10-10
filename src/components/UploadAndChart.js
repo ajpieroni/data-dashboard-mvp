@@ -28,7 +28,8 @@ const UploadAndChart = () => {
             return acc;
         }, []).map(item => ({
             chapter: item.chapter,
-            averagePercentage: item.totalPercentage / item.eventCount
+            averagePercentage: item.totalPercentage / item.eventCount,
+            eventCount: item.eventCount
         }));
 
         setData(aggregatedData);
@@ -43,6 +44,8 @@ const UploadAndChart = () => {
         ? data.filter(d => selectedChapters.some(sc => sc.value === d.chapter))
         : data;
 
+    const formatPercentage = (value) => `${value.toFixed(2)}%`;
+
     return (
         <div>
             <h2>Upload CSV and View Event Check-In Chart</h2>
@@ -54,21 +57,20 @@ const UploadAndChart = () => {
                 placeholder="Filter chapters..."
             />
             {filteredData.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-around' }}>
-                    <ResponsiveContainer width="45%" height={400}>
+                <>
+                    <ResponsiveContainer width="100%" height={400}>
                         <BarChart
                             data={filteredData}
-                            layout="vertical"
-                            margin={{ top: 20, right: 30, left: 100, bottom: 20 }}
+                            margin={{ top: 20, right: 30, left: 30, bottom: 100 }}
                         >
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis type="number" domain={[0, 100]} />
-                            <YAxis dataKey="chapter" type="category" />
-                            <Tooltip />
+                            <XAxis dataKey="chapter" angle={-45} textAnchor="end" interval={0} />
+                            <YAxis tickFormatter={formatPercentage} />
+                            <Tooltip formatter={(value) => formatPercentage(value)} />
                             <Bar dataKey="averagePercentage" fill="#82ca9d" />
                         </BarChart>
                     </ResponsiveContainer>
-                    <ResponsiveContainer width="45%" height={400}>
+                    <ResponsiveContainer width="100%" height={400}>
                         <PieChart>
                             <Pie
                                 data={filteredData}
@@ -78,17 +80,17 @@ const UploadAndChart = () => {
                                 cy="50%"
                                 outerRadius={150}
                                 fill="#8884d8"
-                                label
+                                label={(entry) => `${entry.chapter}: ${formatPercentage(entry.averagePercentage)}, ${entry.eventCount} events`}
                             >
                                 {filteredData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                             </Pie>
-                            <Tooltip />
+                            <Tooltip formatter={(value, name, props) => `${formatPercentage(value)} - ${props.payload.eventCount} events`} />
                             <Legend />
                         </PieChart>
                     </ResponsiveContainer>
-                </div>
+                </>
             )}
         </div>
     );
