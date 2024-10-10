@@ -143,7 +143,7 @@ const UploadAndChart = () => {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="chapter" angle={-45} textAnchor="end" interval={0} />
                             <YAxis tickFormatter={formatPercentage} />
-                            <Tooltip formatter={(value) => formatPercentage(value)} />
+                            <Tooltip formatter={(value, name, props) => [`${formatPercentage(value)} - ${props.payload.eventCount} events`, 'Average Percentage']} />
                             <Bar dataKey="averagePercentage" fill="#82ca9d" />
                         </BarChart>
                     </ResponsiveContainer>
@@ -151,19 +151,20 @@ const UploadAndChart = () => {
                         <PieChart>
                             <Pie
                                 data={filteredData}
-                                dataKey="% Checked In"
+                                dataKey="averagePercentage" // Corrected dataKey
                                 nameKey="chapter"
                                 cx="50%"
                                 cy="50%"
                                 outerRadius={150}
                                 fill="#8884d8"
-                                label={(entry) => `${entry.chapter}: ${formatPercentage(entry.averagePercentage)}, ${entry.eventCount} events`}
+                                label={({ chapter, averagePercentage, eventCount }) => `${chapter}: ${formatPercentage(averagePercentage)}, ${eventCount} events`}
+                                labelLine={false}
                             >
                                 {filteredData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                             </Pie>
-                            <Tooltip formatter={(value, name, props) => `${formatPercentage(value)} - ${props.payload.eventCount} events`} />
+                            <Tooltip formatter={(value, name, props) => [`${formatPercentage(value)} - ${props.payload.eventCount} events`, 'Average Percentage']} />
                             <Legend content={PaginatedLegend} />
                         </PieChart>
                     </ResponsiveContainer>
